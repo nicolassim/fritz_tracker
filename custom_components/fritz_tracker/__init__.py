@@ -13,6 +13,8 @@ from .device_tracker import FritzRouter, FritzData
 
 _LOGGER = logging.getLogger(__name__)
 
+# fixme AttributeError: module 'custom_components.fritz_tracker.device_tracker' has no attribute 'async_setup_entry'
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up fritz_router from config entry."""
@@ -49,8 +51,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await fritz_router.async_config_entry_first_refresh()
 
     # Load the other platforms like switch
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-
+    hass.config_entries.async_setup_platforms(entry, PLATFORMS)
     return True
 
 

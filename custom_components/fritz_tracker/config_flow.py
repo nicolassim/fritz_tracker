@@ -253,7 +253,7 @@ class FritzTrackerOptionsFlowHandler(OptionsFlow):
         """Handle options flow."""
 
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+            return self.async_create_entry(title="Init", data=user_input)
 
         data_schema = vol.Schema(
             {
