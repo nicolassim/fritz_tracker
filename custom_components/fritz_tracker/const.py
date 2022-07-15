@@ -26,3 +26,8 @@ FRITZ_EXCEPTIONS = (
 PLATFORMS = [Platform.DEVICE_TRACKER]
 
 DATA_FRITZ = "fritz_tracker_data"
+
+ERROR_AUTH_INVALID = "invalid_auth"
+ERROR_CANNOT_CONNECT = "cannot_connect"
+ERROR_UPNP_NOT_CONFIGURED = "upnp_not_configured"
+ERROR_UNKNOWN = "unknown_error"

@@ -1,11 +1,11 @@
 {
+  "domain": "fritz_tracker",
+  "name": "Fritz Box Device Tracker",
   "codeowners": ["@nicolassim"],
   "config_flow": true,
   "dependencies": ["network"],
   "documentation": "https://github.com/user/my_component/",
-  "domain": "fritz_tracker",
   "iot_class": "local_polling",
-  "name": "Fritz Box Device Tracker",
   "requirements": ["fritzconnection==1.8.0", "xmltodict==0.13.0"],
   "version": "0.9.0"
 }
