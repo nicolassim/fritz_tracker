@@ -5,19 +5,22 @@ import logging
 from datetime import datetime, timedelta
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Any, TypedDict
+from typing import Any, TypedDict, ValuesView
 
 from fritzconnection import FritzConnection
 from fritzconnection.lib.fritzhosts import FritzHosts
+from homeassistant.components.device_tracker.config_entry import ScannerEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.dispatcher import dispatcher_send
+from homeassistant.helpers.dispatcher import dispatcher_send, async_dispatcher_connect
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
 
 from fritzconnection.core.exceptions import FritzConnectionException, FritzSecurityError
 
-from .const import DOMAIN, DEFAULT_USERNAME, DEFAULT_HOST, DEFAULT_PORT, FRITZ_EXCEPTIONS
+from .const import DOMAIN, DEFAULT_USERNAME, DEFAULT_HOST, DEFAULT_PORT, FRITZ_EXCEPTIONS, DATA_FRITZ, \
+    DEFAULT_DEVICE_NAME
 from homeassistant.helpers import (
     device_registry as dr,
     entity_registry as er,
@@ -26,10 +29,81 @@ from homeassistant.helpers import (
 
 from homeassistant.components.device_tracker.const import (
     CONF_CONSIDER_HOME,
-    DEFAULT_CONSIDER_HOME,
+    DEFAULT_CONSIDER_HOME, SOURCE_TYPE_ROUTER,
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+async def async_setup_entry(
+        hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+) -> None:
+    """Set up device tracker for FRITZ!Box component."""
+    _LOGGER.debug("Starting FRITZ!Box device tracker")
+    router: FritzRouter = hass.data[DOMAIN][entry.entry_id]
+    data_fritz: FritzData = hass.data[DATA_FRITZ]
+
+    @callback
+    def update_fritzbox_device() -> None:
+        """Update the values of AVM device."""
+        _async_add_entities(router, async_add_entities, data_fritz)
+
+    entry.async_on_unload(
+        async_dispatcher_connect(hass, router.signal_device_new, update_fritzbox_device)
+    )
+
+    update_fritzbox_device()
+
+
+@callback
+def _async_add_entities(
+        fritzbox: FritzRouter,
+        async_add_entities: AddEntitiesCallback,
+        data_fritz: FritzData,
+) -> None:
+    """Add new tracker entities from the AVM device."""
+
+    new_tracked = []
+    if fritzbox.unique_id not in data_fritz.tracked:
+        data_fritz.tracked[fritzbox.unique_id] = set()
+
+    for mac, device in fritzbox.devices.items():
+        if device_filter_out_from_trackers(mac, device.hostname, data_fritz.tracked.values()):
+            continue
+
+        new_tracked.append(FritzBoxTracker(fritzbox, device))
+        data_fritz.tracked[fritzbox.unique_id].add(mac)
+
+    if new_tracked:
+        async_add_entities(new_tracked)
+
+
+def _is_tracked(mac: str, current_devices: ValuesView) -> bool:
+    """Check if device is already tracked."""
+    for tracked in current_devices:
+        if mac in tracked:
+            return True
+    return False
+
+
+def device_filter_out_from_trackers(
+        mac: str,
+        hostname: str,
+        current_devices: ValuesView,
+) -> bool:
+    """Check if device should be filtered out from trackers."""
+    reason: str | None = None
+    # if device.ip_address == "":
+    #     reason = "Missing IP"
+    # elif _is_tracked(mac, current_devices):
+    if _is_tracked(mac, current_devices):
+        reason = "Already tracked"
+
+    if reason:
+        _LOGGER.debug(
+            "Skip adding device %s [%s], reason: %s", hostname, mac, reason
+        )
+    return bool(reason)
 
 
 class ExceptionClassSetupMissing(Exception):
@@ -38,6 +112,7 @@ class ExceptionClassSetupMissing(Exception):
     def __init__(self) -> None:
         """Init custom exception."""
         super().__init__("Function called before Class setup")
+
 
 @dataclass
 class FritzData:
@@ -67,86 +142,6 @@ class HostInfo(TypedDict):
     name: str
     ip: str
     status: bool
-
-
-class FritzDevice:
-    """Representation of a device connected to the FRITZ!Box."""
-
-    def __init__(self, mac: str, name: str) -> None:
-        """Initialize device info."""
-        self._connected = False
-        self._connected_to: str | None = None
-        self._connection_type: str | None = None
-        self._ip_address: str | None = None
-        self._last_activity: datetime | None = None
-        self._mac = mac
-        self._name = name
-        self._ssid: str | None = None
-        self._wan_access: bool | None = False
-
-    def update(self, dev_info: Device, consider_home: float) -> None:
-        """Update device info."""
-        utc_point_in_time = dt_util.utcnow()
-
-        if self._last_activity:
-            consider_home_evaluated = (
-                                              utc_point_in_time - self._last_activity
-                                      ).total_seconds() < consider_home
-        else:
-            consider_home_evaluated = dev_info.connected
-
-        if not self._name:
-            self._name = dev_info.name or self._mac.replace(":", "_")
-
-        self._connected = dev_info.connected or consider_home_evaluated
-
-        if dev_info.connected:
-            self._last_activity = utc_point_in_time
-
-        self._connected_to = dev_info.connected_to
-        self._connection_type = dev_info.connection_type
-        self._ip_address = dev_info.ip_address
-        # self._ssid = dev_info.ssid
-
-    @property
-    def connected_to(self) -> str | None:
-        """Return connected status."""
-        return self._connected_to
-
-    @property
-    def connection_type(self) -> str | None:
-        """Return connected status."""
-        return self._connection_type
-
-    @property
-    def is_connected(self) -> bool:
-        """Return connected status."""
-        return self._connected
-
-    @property
-    def mac_address(self) -> str:
-        """Get MAC address."""
-        return self._mac
-
-    @property
-    def hostname(self) -> str:
-        """Get Name."""
-        return self._name
-
-    @property
-    def ip_address(self) -> str | None:
-        """Get IP address."""
-        return self._ip_address
-
-    @property
-    def last_activity(self) -> datetime | None:
-        """Return device last activity."""
-        return self._last_activity
-
-    # property
-    # ef ssid(self) -> str | None:
-    #    """Return device connected SSID."""
-    #    return self._ssid
 
 
 class FritzRouter(update_coordinator.DataUpdateCoordinator):
@@ -438,3 +433,190 @@ class FritzRouter(update_coordinator.DataUpdateCoordinator):
             ):
                 _LOGGER.info("Removing device: %s", device_entry.name)
                 device_reg.async_remove_device(device_entry.id)
+
+
+class FritzDevice:
+    """Representation of a device connected to the FRITZ!Box without Home assistant overhead."""
+
+    def __init__(self, mac: str, name: str) -> None:
+        """Initialize device info."""
+        self._connected = False
+        self._connected_to: str | None = None
+        self._connection_type: str | None = None
+        self._ip_address: str | None = None
+        self._last_activity: datetime | None = None
+        self._mac = mac
+        self._name = name
+        self._ssid: str | None = None
+        self._wan_access: bool | None = False
+
+    def update(self, dev_info: Device, consider_home: float) -> None:
+        """Update device info."""
+        utc_point_in_time = dt_util.utcnow()
+
+        if self._last_activity:
+            consider_home_evaluated = (
+                                              utc_point_in_time - self._last_activity
+                                      ).total_seconds() < consider_home
+        else:
+            consider_home_evaluated = dev_info.connected
+
+        if not self._name:
+            self._name = dev_info.name or self._mac.replace(":", "_")
+
+        self._connected = dev_info.connected or consider_home_evaluated
+
+        if dev_info.connected:
+            self._last_activity = utc_point_in_time
+
+        self._connected_to = dev_info.connected_to
+        self._connection_type = dev_info.connection_type
+        self._ip_address = dev_info.ip_address
+        # self._ssid = dev_info.ssid
+
+    @property
+    def connected_to(self) -> str | None:
+        """Return connected status."""
+        return self._connected_to
+
+    @property
+    def connection_type(self) -> str | None:
+        """Return connected status."""
+        return self._connection_type
+
+    @property
+    def is_connected(self) -> bool:
+        """Return connected status."""
+        return self._connected
+
+    @property
+    def mac_address(self) -> str:
+        """Get MAC address."""
+        return self._mac
+
+    @property
+    def hostname(self) -> str:
+        """Get Name."""
+        return self._name
+
+    @property
+    def ip_address(self) -> str | None:
+        """Get IP address."""
+        return self._ip_address
+
+    @property
+    def last_activity(self) -> datetime | None:
+        """Return device last activity."""
+        return self._last_activity
+
+    # property
+    # ef ssid(self) -> str | None:
+    #    """Return device connected SSID."""
+    #    return self._ssid
+
+
+class FritzDeviceBase(update_coordinator.CoordinatorEntity[FritzRouter]):
+    """Entity base class as meant by home assistant for a device connected
+        to a FRITZ!Box."""
+
+    def __init__(self, avm_wrapper: FritzRouter, device: FritzDevice) -> None:
+        """Initialize a FRITZ!Box device."""
+        super().__init__(avm_wrapper)
+        self._avm_wrapper = avm_wrapper
+        self._mac: str = device.mac_address
+        self._name: str = device.hostname or DEFAULT_DEVICE_NAME
+
+    @property
+    def name(self) -> str:
+        """Return device name."""
+        return self._name
+
+    @property
+    def ip_address(self) -> str | None:
+        """Return the primary ip address of the device."""
+        if self._mac:
+            return self._avm_wrapper.devices[self._mac].ip_address
+        return None
+
+    @property
+    def mac_address(self) -> str:
+        """Return the mac address of the device."""
+        return self._mac
+
+    @property
+    def hostname(self) -> str | None:
+        """Return hostname of the device."""
+        if self._mac:
+            return self._avm_wrapper.devices[self._mac].hostname
+        return None
+
+    @property
+    def should_poll(self) -> bool:
+        """No polling needed."""
+        return False
+
+    async def async_process_update(self) -> None:
+        """Update device."""
+        raise NotImplementedError()
+
+    async def async_on_demand_update(self) -> None:
+        """Update state."""
+        await self.async_process_update()
+        self.async_write_ha_state()
+
+
+class FritzBoxTracker(FritzDeviceBase, ScannerEntity):
+    """This class queries a FRITZ!Box device."""
+
+    def __init__(self, avm_wrapper: FritzRouter, device: FritzDevice) -> None:
+        """Initialize a FRITZ!Box device."""
+        super().__init__(avm_wrapper, device)
+        self._last_activity: datetime | None = device.last_activity
+
+    @property
+    def is_connected(self) -> bool:
+        """Return device status."""
+        return self._avm_wrapper.devices[self._mac].is_connected
+
+    @property
+    def unique_id(self) -> str:
+        """Return device unique id."""
+        return f"{self._mac}_tracker"
+
+    @property
+    def mac_address(self) -> str:
+        """Return mac_address."""
+        return self._mac
+
+    @property
+    def icon(self) -> str:
+        """Return device icon."""
+        if self.is_connected:
+            return "mdi:lan-connect"
+        return "mdi:lan-disconnect"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, str]:
+        """Return the attributes."""
+        attrs: dict[str, str] = {}
+        device = self._avm_wrapper.devices[self._mac]
+        self._last_activity = device.last_activity
+        if self._last_activity is not None:
+            attrs["last_time_reachable"] = self._last_activity.isoformat(
+                timespec="seconds"
+            )
+        if device.connected_to:
+            attrs["connected_to"] = device.connected_to
+        if device.connection_type:
+            attrs["connection_type"] = device.connection_type
+        # if device.ssid:
+        #     attrs["ssid"] = device.ssid
+        return attrs
+
+    @property
+    def source_type(self) -> str:
+        """Return tracker source type."""
+        return SOURCE_TYPE_ROUTER
+
+    async def async_process_update(self) -> None:
+        pass
