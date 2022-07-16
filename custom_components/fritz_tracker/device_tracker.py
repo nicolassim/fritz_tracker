@@ -570,7 +570,7 @@ class FritzDeviceBase(update_coordinator.CoordinatorEntity[FritzRouter]):
 
 
 class FritzBoxTracker(FritzDeviceBase, ScannerEntity):
-    """This class queries a FRITZ!Box device."""
+    """This reppresent a tracked device(entity) on the network."""
 
     def __init__(self, avm_wrapper: FritzRouter, device: FritzDevice) -> None:
         """Initialize a FRITZ!Box device."""

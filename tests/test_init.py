@@ -21,7 +21,7 @@ from homeassistant.core import CoreState, HomeAssistant
 
 
 async def test_form(hass: HomeAssistant) -> None:
-    """Test we get the form."""
+    """Test NOT WORKING """
 
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
