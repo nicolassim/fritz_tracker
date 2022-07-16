@@ -69,7 +69,9 @@ class FritzTrackerFlowHandler(ConfigFlow, domain=DOMAIN):
             _LOGGER.exception("Unexpected exception")
             return ERROR_UNKNOWN
 
-        self._model = connection.call_action("DeviceInfo:1", "GetInfo")["NewModelName"]
+        # Not Allowed to unprivileged user
+        # self._model = connection.call_action("DeviceInfo:1", "GetInfo")["NewModelName"]
+        self._model = "FritzBox Generic"
 
         if (
             "X_AVM-DE_UPnP1" in connection.services

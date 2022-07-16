@@ -225,7 +225,9 @@ class FritzRouter(update_coordinator.DataUpdateCoordinator):
         if not self._unique_id:
             self._unique_id = info["NewSerialNumber"]
 
-        self._model = info.get("NewModelName")
+        # Not Allowed to unprivileged user
+        # self._model = info.get("NewModelName")
+        self._model = "FritzBox Generic"
 
         # if "Layer3Forwarding1" in self.connection.services:
         #     if connection_type := self.connection.call_action(
