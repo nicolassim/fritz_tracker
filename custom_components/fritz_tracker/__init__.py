@@ -34,11 +34,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except FritzConnectionException as ex:
         raise ConfigEntryAuthFailed from ex
 
-    if (
-            "X_AVM-DE_UPnP1" in fritz_router.connection.services
-            and not (await fritz_router.async_get_upnp_configuration())["NewEnable"]
-    ):
-        raise ConfigEntryAuthFailed("Missing UPnP configuration")
+    # not working with unprivileged user
+    # if (
+    #         "X_AVM-DE_UPnP1" in fritz_router.connection.services
+    #         and not (await fritz_router.async_get_upnp_configuration())["NewEnable"]
+    # ):
+    #     raise ConfigEntryAuthFailed("Missing UPnP configuration")
 
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = fritz_router

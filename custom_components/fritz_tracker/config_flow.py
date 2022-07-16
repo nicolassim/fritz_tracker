@@ -73,11 +73,12 @@ class FritzTrackerFlowHandler(ConfigFlow, domain=DOMAIN):
         # self._model = connection.call_action("DeviceInfo:1", "GetInfo")["NewModelName"]
         self._model = "FritzBox Generic"
 
-        if (
-            "X_AVM-DE_UPnP1" in connection.services
-            and not connection.call_action("X_AVM-DE_UPnP1", "GetInfo")["NewEnable"]
-        ):
-            return ERROR_UPNP_NOT_CONFIGURED
+        # # "X_AVM-DE_UPnP1", "GetInfo" Not Allowed to unprivileged user todo search other occurencies and doc
+        # if (
+        #     "X_AVM-DE_UPnP1" in connection.services
+        #     and not connection.call_action("X_AVM-DE_UPnP1", "GetInfo")["NewEnable"]
+        # ):
+        #     return ERROR_UPNP_NOT_CONFIGURED
 
         return None
 

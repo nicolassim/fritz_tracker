@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta
 from dataclasses import dataclass, field
+import random
 from types import MappingProxyType
 from typing import Any, TypedDict, ValuesView
 
@@ -68,7 +69,7 @@ def _async_add_entities(
         data_fritz.tracked[fritzbox.unique_id] = set()
 
     for mac, device in fritzbox.devices.items():
-        if device_filter_out_from_trackers(mac, device.hostname, data_fritz.tracked.values()):
+        if device_filter_out_from_trackers(mac, device, data_fritz.tracked.values()):
             continue
 
         new_tracked.append(FritzBoxTracker(fritzbox, device))
@@ -88,20 +89,19 @@ def _is_tracked(mac: str, current_devices: ValuesView) -> bool:
 
 def device_filter_out_from_trackers(
         mac: str,
-        hostname: str,
+        device: FritzDevice,
         current_devices: ValuesView,
 ) -> bool:
     """Check if device should be filtered out from trackers."""
     reason: str | None = None
-    # if device.ip_address == "":
-    #     reason = "Missing IP"
-    # elif _is_tracked(mac, current_devices):
-    if _is_tracked(mac, current_devices):
+    if device.ip_address == "":
+        reason = "Missing IP"
+    elif _is_tracked(mac, current_devices):
         reason = "Already tracked"
 
     if reason:
         _LOGGER.debug(
-            "Skip adding device %s [%s], reason: %s", hostname, mac, reason
+            "Skip adding device %s [%s], reason: %s", device.hostname, mac, reason
         )
     return bool(reason)
 
@@ -210,20 +210,22 @@ class FritzRouter(update_coordinator.DataUpdateCoordinator):
         )
 
         self.fritz_hosts = FritzHosts(fc=self.connection)
-        info = self.connection.call_action("DeviceInfo:1", "GetInfo")
+        # Not Allowed to unprivileged user
+        # info = self.connection.call_action("DeviceInfo:1", "GetInfo")
 
-        _LOGGER.debug(
-            "gathered device info of %s %s",
-            self.host,
-            {
-                **info,
-                "NewDeviceLog": "***omitted***",
-                "NewSerialNumber": "***omitted***",
-            },
-        )
+        # _LOGGER.debug(
+        #     "gathered device info of %s %s",
+        #     self.host,
+        #     {
+        #         **info,
+        #         "NewDeviceLog": "***omitted***",
+        #         "NewSerialNumber": "***omitted***",
+        #     },
+        # )
 
         if not self._unique_id:
-            self._unique_id = info["NewSerialNumber"]
+            # self._unique_id = info["NewSerialNumber"]
+            self._unique_id = "id-rnd-" + str(random.randint(1000, 9999))
 
         # Not Allowed to unprivileged user
         # self._model = info.get("NewModelName")
@@ -620,5 +622,3 @@ class FritzBoxTracker(FritzDeviceBase, ScannerEntity):
         """Return tracker source type."""
         return SOURCE_TYPE_ROUTER
 
-    async def async_process_update(self) -> None:
-        pass
