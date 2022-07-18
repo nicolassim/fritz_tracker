@@ -71,10 +71,11 @@ def _async_add_entities(
     for mac, device in fritzbox.devices.items():
         if device_filter_out_from_trackers(mac, device, data_fritz.tracked.values()):
             continue
-
-        new_tracked.append(FritzBoxTracker(fritzbox, device))
+        new_entity = FritzBoxTracker(fritzbox, device)
+        new_tracked.append(new_entity)
         data_fritz.tracked[fritzbox.unique_id].add(mac)
-
+        _LOGGER.debug(f"New Entity ({mac}) is going to be {'enabled' if new_entity.enabled else 'disabled'} "
+                      "so enabled by default is {new_entity.entity_registry_enabled_default}.")
     if new_tracked:
         async_add_entities(new_tracked)
 
@@ -298,12 +299,12 @@ class FritzRouter(update_coordinator.DataUpdateCoordinator):
         return []
 
     def _service_call_action(
-                self,
-                service_name: str,
-                service_suffix: str,
-                action_name: str,
-                **kwargs: Any,
-            ) -> dict:
+            self,
+            service_name: str,
+            service_suffix: str,
+            action_name: str,
+            **kwargs: Any,
+    ) -> dict:
         """Return service details."""
 
         if self.hass.is_stopping:
@@ -367,6 +368,7 @@ class FritzRouter(update_coordinator.DataUpdateCoordinator):
             self._devices[dev_mac].update(dev_info, consider_home)
             return False
 
+        _LOGGER.debug(f"Found new device on the FritzBox {dev_mac}, {dev_info.name}.")
         device = FritzDevice(dev_mac, dev_info.name)
         device.update(dev_info, consider_home)
         self._devices[dev_mac] = device
@@ -570,7 +572,7 @@ class FritzDeviceBase(update_coordinator.CoordinatorEntity[FritzRouter]):
 
 
 class FritzBoxTracker(FritzDeviceBase, ScannerEntity):
-    """This reppresent a tracked device(entity) on the network."""
+    """This represent a tracked device(entity) on the network."""
 
     def __init__(self, avm_wrapper: FritzRouter, device: FritzDevice) -> None:
         """Initialize a FRITZ!Box device."""
@@ -621,4 +623,3 @@ class FritzBoxTracker(FritzDeviceBase, ScannerEntity):
     def source_type(self) -> str:
         """Return tracker source type."""
         return SOURCE_TYPE_ROUTER
-
