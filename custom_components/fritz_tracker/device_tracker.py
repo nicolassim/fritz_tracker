@@ -74,8 +74,7 @@ def _async_add_entities(
         new_entity = FritzBoxTracker(fritzbox, device)
         new_tracked.append(new_entity)
         data_fritz.tracked[fritzbox.unique_id].add(mac)
-        _LOGGER.debug(f"New Entity ({mac}) is going to be {'enabled' if new_entity.enabled else 'disabled'} "
-                      f"so enabled by default is {new_entity.entity_registry_enabled_default}.")
+        _LOGGER.debug(f"New Entity ({mac}) is going to be {'enabled' if new_entity.enabled else 'disabled'} ")
     if new_tracked:
         async_add_entities(new_tracked)
 
@@ -623,3 +622,7 @@ class FritzBoxTracker(FritzDeviceBase, ScannerEntity):
     def source_type(self) -> str:
         """Return tracker source type."""
         return SOURCE_TYPE_ROUTER
+
+    @property
+    def entity_registry_enabled_default(self) -> bool:
+        return True
