@@ -75,7 +75,7 @@ def _async_add_entities(
         new_tracked.append(new_entity)
         data_fritz.tracked[fritzbox.unique_id].add(mac)
         _LOGGER.debug(f"New Entity ({mac}) is going to be {'enabled' if new_entity.enabled else 'disabled'} "
-                      "so enabled by default is {new_entity.entity_registry_enabled_default}.")
+                      f"so enabled by default is {new_entity.entity_registry_enabled_default}.")
     if new_tracked:
         async_add_entities(new_tracked)
 
