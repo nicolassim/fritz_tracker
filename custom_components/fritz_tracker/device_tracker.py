@@ -210,6 +210,20 @@ class FritzRouter(update_coordinator.DataUpdateCoordinator):
         )
 
         self.fritz_hosts = FritzHosts(fc=self.connection)
+        for device in self.fritz_hosts.get_hosts_info():
+            if not device.get("ip"):
+                continue
+            if not device.get("mac"):
+                continue
+            if device["ip"] == self.host:
+                self._unique_id = device["mac"]
+                break
+            if not device.get("name"):
+                continue
+            if device["name"] == self.host:
+                self._unique_id = device["mac"]
+                break
+
         # Not Allowed to unprivileged user
         # info = self.connection.call_action("DeviceInfo:1", "GetInfo")
 
