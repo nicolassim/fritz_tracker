@@ -94,9 +94,10 @@ def device_filter_out_from_trackers(
 ) -> bool:
     """Check if device should be filtered out from trackers."""
     reason: str | None = None
-    if device.ip_address == "":
-        reason = "Missing IP"
-    elif _is_tracked(mac, current_devices):
+    # if device.ip_address == "":
+    #     reason = "Missing IP"
+    # elif _is_tracked(mac, current_devices):
+    if _is_tracked(mac, current_devices):
         reason = "Already tracked"
 
     if reason:
@@ -436,9 +437,25 @@ class FritzRouter(update_coordinator.DataUpdateCoordinator):
         data_fritz: FritzData = self.hass.data[DATA_FRITZ]
         if self.mac in data_fritz.tracked:
             # during setup self_mac might not yet be there
-            for mac in data_fritz.tracked[self.mac]:
-                if mac not in hosts.keys():
-                    self._devices[mac].disconnect()
+            for dev_mac in data_fritz.tracked[self.mac]:
+                if dev_mac not in hosts.keys():
+                    # manage unknown devices
+                    if dev_mac in self._devices:
+                        self._devices[dev_mac].disconnect()
+                    else:
+                        dev_info = Device(
+                                name="no_name",
+                                connected=False,
+                                connected_to="",
+                                connection_type="",
+                                ip_address="",
+                                ssid=None,
+                                wan_access=None,
+                            )
+                        old_device = FritzDevice(dev_mac, dev_info.name)
+                        old_device.update(dev_info, consider_home)
+                        self._devices[dev_mac] = old_device
+                        new_device = True
 
         self.send_signal_device_update(new_device)
         return
@@ -502,10 +519,11 @@ class FritzDevice:
         self._ip_address = dev_info.ip_address
         # self._ssid = dev_info.ssid
 
-    def disconnect(self):
-        # todo implement
-        # shall be similar to the update
+    def disconnect(self) -> None:
+        # self._connected = False
+        # self._ip_address = ""
         pass
+
 
     @property
     def connected_to(self) -> str | None:
