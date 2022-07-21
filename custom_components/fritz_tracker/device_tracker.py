@@ -435,13 +435,24 @@ class FritzRouter(update_coordinator.DataUpdateCoordinator):
 
         # checkin on missing devices
         data_fritz: FritzData = self.hass.data[DATA_FRITZ]
-        if self.mac in data_fritz.tracked:
+        _LOGGER.debug(f"known devices: {repr(data_fritz.tracked)}")
+        if self._unique_id in data_fritz.tracked.keys():
             # during setup self_mac might not yet be there
-            for dev_mac in data_fritz.tracked[self.mac]:
+            for dev_mac in data_fritz.tracked[self._unique_id]:
                 if dev_mac not in hosts.keys():
+                    _LOGGER.debug(f"Found device that left the guest lan: {dev_mac}")
                     # manage unknown devices
                     if dev_mac in self._devices:
-                        self._devices[dev_mac].disconnect()
+                        dev_info = Device(
+                            name=self._devices[dev_mac].hostname,
+                            connected=False,
+                            connected_to="",
+                            connection_type="",
+                            ip_address=self._devices[dev_mac].ip_address,
+                            ssid=None,
+                            wan_access=None,
+                        )
+                        self._devices[dev_mac].update(dev_info, 0)
                     else:
                         dev_info = Device(
                                 name="no_name",
@@ -519,11 +530,7 @@ class FritzDevice:
         self._ip_address = dev_info.ip_address
         # self._ssid = dev_info.ssid
 
-    def disconnect(self) -> None:
-        # self._connected = False
-        # self._ip_address = ""
-        pass
-
+        _LOGGER.debug(f"Updating Data for  {self._mac}, consider_home status is {consider_home_evaluated}, connected is {self._connected}.")
 
     @property
     def connected_to(self) -> str | None:
@@ -672,3 +679,9 @@ class FritzTrackedDevice(FritzDeviceBase, ScannerEntity):
     @property
     def entity_registry_enabled_default(self) -> bool:
         return True
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        _LOGGER.debug(f"Updating entity {self._mac}: connected: {self.is_connected}, icon '{self.icon}'")
+        super()._handle_coordinator_update()
+
