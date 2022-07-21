@@ -71,7 +71,7 @@ def _async_add_entities(
     for mac, device in fritzbox.devices.items():
         if device_filter_out_from_trackers(mac, device, data_fritz.tracked.values()):
             continue
-        new_entity = FritzBoxTracker(fritzbox, device)
+        new_entity = FritzTrackedDevice(fritzbox, device)
         new_tracked.append(new_entity)
         data_fritz.tracked[fritzbox.unique_id].add(mac)
         _LOGGER.debug(f"New Entity ({mac}) is going to be {'enabled' if new_entity.enabled else 'disabled'} ")
@@ -417,6 +417,15 @@ class FritzRouter(update_coordinator.DataUpdateCoordinator):
         for mac, info in hosts.items():
             if self.manage_device_info(info, mac, consider_home):
                 new_device = True
+
+        # checkin on missing devices
+        data_fritz: FritzData = self.hass.data[DATA_FRITZ]
+        if self.mac in data_fritz.tracked:
+            # during setup self_mac might not yet be there
+            for mac in data_fritz.tracked[self.mac]:
+                if mac not in hosts.keys():
+                    self._devices[mac].disconnect()
+
         self.send_signal_device_update(new_device)
         return
 
@@ -479,6 +488,11 @@ class FritzDevice:
         self._ip_address = dev_info.ip_address
         # self._ssid = dev_info.ssid
 
+    def disconnect(self):
+        # todo implement
+        # shall be similar to the update
+        pass
+
     @property
     def connected_to(self) -> str | None:
         """Return connected status."""
@@ -524,10 +538,10 @@ class FritzDeviceBase(update_coordinator.CoordinatorEntity[FritzRouter]):
     """Entity base class as meant by home assistant for a device connected
         to a FRITZ!Box."""
 
-    def __init__(self, avm_wrapper: FritzRouter, device: FritzDevice) -> None:
+    def __init__(self, router: FritzRouter, device: FritzDevice) -> None:
         """Initialize a FRITZ!Box device."""
-        super().__init__(avm_wrapper)
-        self._avm_wrapper = avm_wrapper
+        super().__init__(router)
+        self.router = router
         self._mac: str = device.mac_address
         self._name: str = device.hostname or DEFAULT_DEVICE_NAME
 
@@ -540,7 +554,7 @@ class FritzDeviceBase(update_coordinator.CoordinatorEntity[FritzRouter]):
     def ip_address(self) -> str | None:
         """Return the primary ip address of the device."""
         if self._mac:
-            return self._avm_wrapper.devices[self._mac].ip_address
+            return self.router.devices[self._mac].ip_address
         return None
 
     @property
@@ -552,7 +566,7 @@ class FritzDeviceBase(update_coordinator.CoordinatorEntity[FritzRouter]):
     def hostname(self) -> str | None:
         """Return hostname of the device."""
         if self._mac:
-            return self._avm_wrapper.devices[self._mac].hostname
+            return self.router.devices[self._mac].hostname
         return None
 
     @property
@@ -570,18 +584,18 @@ class FritzDeviceBase(update_coordinator.CoordinatorEntity[FritzRouter]):
         self.async_write_ha_state()
 
 
-class FritzBoxTracker(FritzDeviceBase, ScannerEntity):
-    """This represent a tracked device(entity) on the network."""
+class FritzTrackedDevice(FritzDeviceBase, ScannerEntity):
+    """This represents a tracked device(entity) on the network."""
 
-    def __init__(self, avm_wrapper: FritzRouter, device: FritzDevice) -> None:
+    def __init__(self, router: FritzRouter, device: FritzDevice) -> None:
         """Initialize a FRITZ!Box device."""
-        super().__init__(avm_wrapper, device)
+        super().__init__(router, device)
         self._last_activity: datetime | None = device.last_activity
 
     @property
     def is_connected(self) -> bool:
         """Return device status."""
-        return self._avm_wrapper.devices[self._mac].is_connected
+        return self.router.devices[self._mac].is_connected
 
     @property
     def unique_id(self) -> str:
@@ -604,7 +618,7 @@ class FritzBoxTracker(FritzDeviceBase, ScannerEntity):
     def extra_state_attributes(self) -> dict[str, str]:
         """Return the attributes."""
         attrs: dict[str, str] = {}
-        device = self._avm_wrapper.devices[self._mac]
+        device = self.router.devices[self._mac]
         self._last_activity = device.last_activity
         if self._last_activity is not None:
             attrs["last_time_reachable"] = self._last_activity.isoformat(
