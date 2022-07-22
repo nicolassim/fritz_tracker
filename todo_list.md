@@ -4,7 +4,6 @@
 - [x] used the mac from host to set router_unique_id
 - [ ] use devices that result present and disconnected to understand potential subnet(s) assuming /24
 - [ ] the gui on http knows the model of the router without login
-- [ ] move storage of device data class from _devices to hass.data
 - [ ] remove user and password from config
 #### Devices
 - [ ] consider device that disappear and not members of subnet(s) as guest lan /24
@@ -16,4 +15,6 @@
 
 
 #### issues
-- [ ] modified names are lost when integration reloads ( or after delete and re-add, not sure) 
+- [ ] restored entities are connected, mark them as not at home.
+- [ ] hass.data does not persist on reboot, now looks redundant to _devices. maybe use-less. find more info
+- [ ] Minimize the number of extra_state_attributes by removing non-critical attributes
