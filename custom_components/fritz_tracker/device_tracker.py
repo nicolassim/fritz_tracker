@@ -19,6 +19,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
 
 from fritzconnection.core.exceptions import FritzConnectionException, FritzSecurityError
+import urllib.request
 
 from .const import DOMAIN, DEFAULT_USERNAME, DEFAULT_HOST, DEFAULT_PORT, FRITZ_EXCEPTIONS, DATA_FRITZ, \
     DEFAULT_DEVICE_NAME
@@ -242,9 +243,17 @@ class FritzRouter(update_coordinator.DataUpdateCoordinator):
             # self._unique_id = info["NewSerialNumber"]
             self._unique_id = "id-rnd-" + str(random.randint(1000, 9999))
 
-        # Not Allowed to unprivileged user
-        # self._model = info.get("NewModelName")
-        self._model = "FritzBox Generic"
+        try:
+            http_connection = urllib.request.urlopen(f"http://{self.host}")
+            html = http_connection.read()
+            search_str = b'"bluBarTitle":"'
+            model_start_pos = html.find(search_str)
+            model_start_pos += len(search_str)
+            model_end_pos = html.find(b'"', model_start_pos)
+            self._model = html[model_start_pos:model_end_pos].decode()
+        except Exception as e:
+            _LOGGER.debug(f"error by fetching model: {repr(e)}")
+            self._model = "FritzBox Generic"
 
         # if "Layer3Forwarding1" in self.connection.services:
         #     if connection_type := self.connection.call_action(
@@ -530,7 +539,8 @@ class FritzDevice:
         self._ip_address = dev_info.ip_address
         # self._ssid = dev_info.ssid
 
-        _LOGGER.debug(f"Updating Data for  {self._mac}, consider_home status is {consider_home_evaluated}, connected is {self._connected}.")
+        _LOGGER.debug(f"Updating Data for  {self._mac}, consider_home status is {consider_home_evaluated}, "
+                      f"connected is {self._connected}.")
 
     @property
     def connected_to(self) -> str | None:
@@ -561,11 +571,6 @@ class FritzDevice:
     def ip_address(self) -> str | None:
         """Get IP address."""
         return self._ip_address
-
-    @property
-    def last_activity(self) -> datetime | None:
-        """Return device last activity."""
-        return self._last_activity
 
     # property
     # ef ssid(self) -> str | None:
@@ -629,7 +634,6 @@ class FritzTrackedDevice(FritzDeviceBase, ScannerEntity):
     def __init__(self, router: FritzRouter, device: FritzDevice) -> None:
         """Initialize a FRITZ!Box device."""
         super().__init__(router, device)
-        self._last_activity: datetime | None = device.last_activity
 
     @property
     def is_connected(self) -> bool:
@@ -658,11 +662,6 @@ class FritzTrackedDevice(FritzDeviceBase, ScannerEntity):
         """Return the attributes."""
         attrs: dict[str, str] = {}
         device = self.router.devices[self._mac]
-        self._last_activity = device.last_activity
-        if self._last_activity is not None:
-            attrs["last_time_reachable"] = self._last_activity.isoformat(
-                timespec="seconds"
-            )
         if device.connected_to:
             attrs["connected_to"] = device.connected_to
         if device.connection_type:
@@ -680,8 +679,7 @@ class FritzTrackedDevice(FritzDeviceBase, ScannerEntity):
     def entity_registry_enabled_default(self) -> bool:
         return True
 
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        _LOGGER.debug(f"Updating entity {self._mac}: connected: {self.is_connected}, icon '{self.icon}'")
-        super()._handle_coordinator_update()
-
+    # @callback
+    # def _handle_coordinator_update(self) -> None:
+    #     _LOGGER.debug(f"Updating entity {self._mac}: connected: {self.is_connected}, icon '{self.icon}'")
+    #     super()._handle_coordinator_update()

@@ -1,6 +1,7 @@
 """Config flow to configure the FRITZ!Box Tools integration."""
 from __future__ import annotations
 
+import urllib.request
 from collections.abc import Mapping
 import logging
 import socket
@@ -69,11 +70,19 @@ class FritzTrackerFlowHandler(ConfigFlow, domain=DOMAIN):
             _LOGGER.exception("Unexpected exception")
             return ERROR_UNKNOWN
 
-        # Not Allowed to unprivileged user
-        # self._model = connection.call_action("DeviceInfo:1", "GetInfo")["NewModelName"]
-        self._model = "FritzBox Generic"
+        try:
+            http_connection = urllib.request.urlopen(f"http://{self._host}")
+            html = http_connection.read()
+            search_str = b'"bluBarTitle":"'
+            model_start_pos = html.find(search_str)
+            model_start_pos += len(search_str)
+            model_end_pos = html.find(b'"', model_start_pos)
+            self._model = html[model_start_pos:model_end_pos].decode()
+        except Exception as e:
+            _LOGGER.debug(f"error by fetching model: {repr(e)}")
+            self._model = "FritzBox Generic"
 
-        # # "X_AVM-DE_UPnP1", "GetInfo" Not Allowed to unprivileged user todo search other occurencies and doc
+        # # "X_AVM-DE_UPnP1", "GetInfo" Not Allowed to unprivileged user
         # if (
         #     "X_AVM-DE_UPnP1" in connection.services
         #     and not connection.call_action("X_AVM-DE_UPnP1", "GetInfo")["NewEnable"]
